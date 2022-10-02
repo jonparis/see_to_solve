@@ -1,0 +1,6 @@
+[submodule "stockfish"]
+	path = stockfish
+	url = https://github.com/jonparis/stockfish
+[submodule "board_detector"]
+	path = board_detector
+	url = https://github.com/jonparis/chess_position_detector
