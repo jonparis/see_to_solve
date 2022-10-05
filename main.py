@@ -4,7 +4,7 @@ import torch
 import cv2
 import numpy
 from board_detector.chessposition import Utils
-from stockfish import Stockfish, StockfishException
+from stockfish.stockfish import Stockfish, StockfishException
 stockfish = Stockfish()
 
 
@@ -15,22 +15,9 @@ if __name__ == '__main__':
     print("image Path", image_path)
     model_path = "board_detector/models/position_predict_20.pt"
     my_model = torch.jit.load(model_path)
-    print(model_path, "model loaded")
-    my_model.eval()
-    print(model_path, "ready for evaluation")
 
-    img_unprocessed = cv2.imread(image_path)
-    my_image = Utils.img_processing(img_unprocessed)
+    fen = Utils.pred_single_img(model_path, image_path)
 
-    # cv2.destroyAllWindows()  # destroy all windows
-    img_array = []
-    img_array.extend(my_image)
-    my_pred_label = my_model(torch.FloatTensor(img_array))
-    my_pred_label = \
-        my_pred_label.view(len(my_pred_label), -1).argmax(1).cpu().numpy().astype(numpy.int32).tolist()
-
-
-    fen = Utils.lb_to_fen(my_pred_label)
     print(fen)
     new_fen = fen.replace("-", "/")
     print(new_fen)
