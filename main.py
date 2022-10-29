@@ -13,7 +13,7 @@ if __name__ == '__main__':
     root.withdraw()
     image_path = filedialog.askopenfilename()
     print("image Path", image_path)
-    model_path = "board_detector/models/position_predict_20.pt"
+    model_path = "board_detector/models/position_predict.pt"
     my_model = torch.jit.load(model_path)
 
     fen = Utils.pred_single_img(model_path, image_path)
