@@ -27,23 +27,20 @@ class SeeToSolve:
         new_fen = fen.replace("-", "/")
         white_fen = new_fen.strip() + " w"
         black_fen = new_fen.strip() + " b"
-        white_valid = stockfish.is_fen_valid(white_fen)
-        black_valid = stockfish.is_fen_valid(black_fen)
-        stockfish.set_fen_position(white_fen)
         # print(stockfish.get_board_visual())
         white_valid = black_valid = True
         try:
             stockfish.set_fen_position(white_fen)
             whites_best_move = stockfish.get_best_move()
         except StockfishException:
-            whites_best_move = "Not a thing"
+            whites_best_move = None
             white_valid = False
         # print(stockfish.get_board_visual())
         try:
             stockfish.set_fen_position(black_fen)
             blacks_best_move = stockfish.get_best_move()
         except StockfishException:
-            blacks_best_move = "Not a thing"
+            blacks_best_move = None
             black_valid = False
         if not black_valid and not white_valid:
             print("no valid moves - checkmate?")
