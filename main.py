@@ -12,10 +12,11 @@ stockfish = Stockfish()
 
 class SeeToSolve():
     def __init__(self, playing):
-        if playing == "" or playing != "b":
+        if playing != "b":
             self.playing = "w"
         else:
             self.playing = "b"
+        print(self.playing)
         self.image_path = None
         self.model_path = "board_detector/models/position_predict.pt"
         self.my_model = torch.jit.load(self.model_path)
@@ -59,37 +60,24 @@ class SeeToSolve():
         if self.playing == "b":
             fen = fen[::-1]
         print(fen)
-        new_fen = fen.replace("-", "/")
-        white_fen = new_fen.strip() + " w"
-        black_fen = new_fen.strip() + " b"
+        new_fen = fen.replace("-", "/")  + " " + self.playing
         # print(stockfish.get_board_visual())
-        white_valid = black_valid = True
+        valid_move = True
         try:
-            stockfish.set_fen_position(white_fen)
-            whites_best_move = stockfish.get_best_move()
+            stockfish.set_fen_position(new_fen)
+            best_move = stockfish.get_best_move()
         except StockfishException:
-            whites_best_move = None
-            white_valid = False
-        # print(stockfish.get_board_visual())
-        try:
-            stockfish.set_fen_position(black_fen)
-            blacks_best_move = stockfish.get_best_move()
-        except StockfishException:
-            blacks_best_move = None
-            black_valid = False
-        if not black_valid and not white_valid:
+            best_move = None
+            valid_move = False
+        if not valid_move:
             print("no valid moves - checkmate?")
         else:
-            if white_valid and self.playing == "w": 
-                self.annotated_move(fen, whites_best_move)
-            if black_valid and self.playing == "b": 
-                self.annotated_move(fen, blacks_best_move)
-            if self.rename:
-                original = self.image_path
-
-                new_name = os.path.dirname(self.image_path) + "/" + fen + " " +  str(time.time()) + ".png"
-                os.rename(original, new_name)
-                self.image_path = new_name
+            self.annotated_move(fen, best_move)
+        if self.rename:
+            original = self.image_path
+            new_name = os.path.dirname(self.image_path) + "/" + fen + " " +  str(time.time()) + ".png"
+            os.rename(original, new_name)
+            self.image_path = new_name
 
     def check_for_new_image(self):
         new_image = self.get_last_image(screenshot_path)
@@ -104,8 +92,7 @@ if __name__ == '__main__':
     playing = input("are you playing White (w) or Black (b)?").lower()
     see_to_solve = SeeToSolve(playing)
     starttime = time.time()
-    interval = 1.0 # seconds
+    interval = 0.5 # seconds
     while True:
         see_to_solve.check_for_new_image()
         time.sleep(interval - ((time.time() - starttime) % interval))
-
