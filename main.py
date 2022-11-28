@@ -5,10 +5,9 @@ import numpy
 import string
 import time
 import os
-from board_detector.chessposition import Utils
+from board_detector.chessposition import Utils, CONST
 from stockfish.stockfish import Stockfish, StockfishException
 stockfish = Stockfish()
-
 
 class SeeToSolve():
     def __init__(self, playing):
@@ -18,7 +17,7 @@ class SeeToSolve():
             self.playing = "b"
         print(self.playing)
         self.image_path = None
-        self.model_path = "board_detector/models/position_predict.pt"
+        self.model_path = "board_detector/models/position_predict_stable.pt"
         self.my_model = torch.jit.load(self.model_path)
         self.rename = True
 
@@ -56,7 +55,7 @@ class SeeToSolve():
                 return max(valid, key=os.path.getmtime)
 
     def recommend_move(self):
-        fen = Utils.pred_single_img(self.model_path, self.image_path)
+        pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_path)
         if self.playing == "b":
             fen = fen[::-1]
         print(fen)
@@ -75,7 +74,7 @@ class SeeToSolve():
             self.annotated_move(fen, best_move)
         if self.rename:
             original = self.image_path
-            new_name = os.path.dirname(self.image_path) + "/" + fen + " " +  str(time.time()) + ".png"
+            new_name = os.path.dirname(self.image_path) + "/" + pred_fen + " " +  str(time.time()) + ".png"
             os.rename(original, new_name)
             self.image_path = new_name
 
