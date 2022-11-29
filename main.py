@@ -58,17 +58,16 @@ class SeeToSolve():
         pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_path)
         if self.playing == "b":
             fen = fen[::-1]
-        print(fen)
         new_fen = fen.replace("-", "/")  + " " + self.playing
-        # print(stockfish.get_board_visual())
-        valid_move = True
+        print(new_fen)
+        best_move = None
         try:
             stockfish.set_fen_position(new_fen)
             best_move = stockfish.get_best_move()
+            #  print(stockfish.get_board_visual())
         except StockfishException:
             best_move = None
-            valid_move = False
-        if not valid_move:
+        if not best_move:
             print("no valid moves - checkmate?")
         else:
             self.annotated_move(fen, best_move)
