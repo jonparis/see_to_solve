@@ -59,16 +59,39 @@ class SeeToSolve():
         if self.playing == "b":
             fen = fen[::-1]
         new_fen = fen.replace("-", "/")  + " " + self.playing
-        print(new_fen)
-        best_move = None
+        best_move = False
+        
+        try:
+            is_valid = stockfish.is_fen_valid(new_fen)
+        except StockfishException:
+            print("crash checking if fen is valid")
+
+        
         try:
             stockfish.set_fen_position(new_fen)
-            best_move = stockfish.get_best_move()
-            #  print(stockfish.get_board_visual())
         except StockfishException:
-            best_move = None
+            print("crash when setting fen")
+        if is_valid:
+            try:
+                best_move = stockfish.get_best_move()
+            except StockfishException:
+                print('crash when getting best move')
+                best_move = False
+        else:
+            print("not a valid fen:", new_fen)
+            
+        try:
+            if self.playing == "b": 
+                print(stockfish.get_board_visual(False))
+            else:
+                print(stockfish.get_board_visual())
+        except StockfishException:
+            print("crash when printing visual")
+        
+
         if not best_move:
             print("no valid moves - checkmate?")
+            stockfish.set_fen_position(new_fen)
         else:
             self.annotated_move(fen, best_move)
         if self.rename:
