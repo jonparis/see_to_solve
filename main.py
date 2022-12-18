@@ -10,6 +10,9 @@ from stockfish.stockfish import Stockfish, StockfishException
 from configparser import ConfigParser
 stockfish = Stockfish()
 
+DELETE_DUP = "delete_dup"
+DEBUG = True
+
 class SeeToSolve():
     def __init__(self):
         self.screenshots_path = self.get_screenshots_path()
@@ -18,6 +21,8 @@ class SeeToSolve():
         self.my_model = torch.jit.load(self.model_path)
         self.rename = True
         self.playing = None
+        self.last_fen = None
+        self.interval = 1
 
     @staticmethod
     def fen_to_positions(fen):
@@ -75,29 +80,28 @@ class SeeToSolve():
             valid = [f for f in files if '.' in f and f.rsplit('.',1)[-1] in image_ext and os.path.isfile(f)]
             if valid:
                 return max(valid, key=os.path.getmtime)
+            return False
 
     def set_playing(self, fen):
-        if self.playing != None: 
-            return
-        playing_black = Utils.playing_black(fen)
-        if playing_black == True: 
-            self.playing = "b"
-        elif playing_black == False:
-            self.playing = "w"
-        else:
+        playing_black_or_white = Utils.playing_black(fen)
+        if self.playing == None and playing_black_or_white == None:
             playing = input("are you playing White (w) or Black (b)?").lower()
             if playing != "b":
                 self.playing = "w"
             else:
                 self.playing = "b"
-        print(self.playing)
-
-
-
-
-
+        elif playing_black_or_white != None:
+            if self.playing != playing_black_or_white:
+                print("Playing:", playing_black_or_white)
+            self.playing = playing_black_or_white
+        return
+        
     def recommend_move(self):
         pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_path)
+        if pred_fen == self.last_fen:
+            return DELETE_DUP
+        else:
+            self.last_fen = pred_fen
         self.set_playing(pred_fen)
         if self.playing == "b":
             fen = fen[::-1]
@@ -109,16 +113,10 @@ class SeeToSolve():
             stockfish.set_fen_position(new_fen)
         except StockfishException:
             is_valid = False
-            print("crash when setting fen")
-        
-        if is_valid:
-            try:
-                best_move = stockfish.get_best_move()
-            except StockfishException:
-                print('crash when getting best move')
-                best_move = False
-        else:
-            print("not a valid fen:", new_fen)
+            if DEBUG: print("crash when setting fen")
+            stockfish.send_quit_command()
+            self.interval = 5
+            return False
 
         try:
             if self.playing == "b": 
@@ -126,33 +124,62 @@ class SeeToSolve():
             else:
                 print(stockfish.get_board_visual())
         except StockfishException:
-            print("crash when printing visual")
+            if DEBUG: print("crash when printing visual")
+            stockfish.send_quit_command()
+            return False
         
-
-        if not best_move:
-            print("no valid moves - checkmate?")
-            stockfish.set_fen_position(new_fen)
+        if is_valid:
+            try:
+                best_move = stockfish.get_best_move()
+            except StockfishException:
+                if DEBUG: print('crash when getting best move')
+                stockfish.send_quit_command()
+                best_move = False
+                self.interval = 5
+                return False
         else:
+            print("not a valid fen (" +  new_fen + ")")
+            
+        
+        if best_move:
             self.annotated_move(fen, best_move)
+
         if self.rename:
             original = self.image_path
             new_name = os.path.dirname(self.image_path) + "/" + pred_fen + " " +  str(time.time()) + ".png"
             os.rename(original, new_name)
             self.image_path = new_name
 
+        return True
+
     def check_for_new_image(self):
         new_image = self.get_last_image()
-        if self.image_path is None or new_image.split()[0] != self.image_path.split()[0]:
+        if new_image and (self.image_path is None or new_image.split()[0] != self.image_path.split()[0]):
             self.image_path = new_image
-            self.recommend_move()
+            if self.recommend_move() == DELETE_DUP:
+                os.remove(new_image)  # Delete image if we have seen it before
+    
+    def fix_images(self):
+        files = [os.path.join(self.screenshots_path, filename) for filename in os.listdir(self.screenshots_path)]
+        for original in files:
+            filename = os.path.basename(original)
+            new_name = os.path.dirname(original) + "/" + filename.replace("/", "-").replace(":", "-")
+            os.rename(original, new_name)
+
+    def update_interval(self):
+        if self.interval > 1:
+            self.interval -= 1
+
 
 if __name__ == '__main__':
     root = tk.Tk()
     root.withdraw()
     see_to_solve = SeeToSolve()
     starttime = time.time()
-    interval = 0.5 # seconds
+    see_to_solve.interval
     while True:
+        # see_to_solve.fix_images()  # use to fix images created through other mechanism
         see_to_solve.check_for_new_image()
-        time.sleep(interval - ((time.time() - starttime) % interval))
+        time.sleep(see_to_solve.interval - ((time.time() - starttime) % see_to_solve.interval))
+        see_to_solve.update_interval()
 
