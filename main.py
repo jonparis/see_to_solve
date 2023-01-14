@@ -5,6 +5,7 @@ import numpy
 import string
 import time
 import os
+import random
 from board_detector.chessposition import Utils, CONST
 from stockfish.stockfish import Stockfish, StockfishException
 from configparser import ConfigParser
@@ -22,6 +23,7 @@ class SeeToSolve():
         self.rename = True
         self.playing = None
         self.last_fen = None
+        self.current_fen = None
         self.interval = 1
 
     @staticmethod
@@ -35,7 +37,10 @@ class SeeToSolve():
         return label_array
 
     @staticmethod
-    def annotated_move(fen, move):
+    def annotated_move(fen, good_move_item):
+        move = good_move_item['Move']
+        centipawn = good_move_item['Centipawn']
+        mate_in = good_move_item['Mate']
         position_array = SeeToSolve.fen_to_positions(fen)
         start_position = string.ascii_lowercase.index(move[0]) + 8 * (8 - int(move[1]))
         end_position = string.ascii_lowercase.index(move[2]) + 8 * (8 - int(move[3]))
@@ -44,11 +49,30 @@ class SeeToSolve():
 
         moving_piece_desc = piece_names[position_array[start_position].lower()]
 
+        extra_info = "("
+        advantage = "white"  # default
+        if (centipawn and centipawn < 0) or (mate_in and mate_in < 0):
+            advantage = "black"
+
+        if centipawn is None:
+            pass
+        elif centipawn == 0:
+            extra_info += "even game"
+        else:
+            extra_info += advantage + " +" + str(abs(centipawn))
+
+        if not mate_in:
+            pass
+        else:
+            extra_info += advantage + " mate in " + str(abs(mate_in))
+
+        extra_info += ")"
+        
         if not str.isdigit(str(position_array[end_position])):
             end_piece_desc = piece_names[position_array[end_position].lower()]
-            print("Move", moving_piece_desc, "on", move[0:2], "to take", end_piece_desc, "on", move[2:4])
+            print("Move", moving_piece_desc, "on", move[0:2], "to take", end_piece_desc, "on", move[2:4], extra_info)
         else:
-            print("Move", moving_piece_desc, "on", move[0:2], "to", move[2:4])
+            print("Move", moving_piece_desc, "on", move[0:2], "to", move[2:4], extra_info)
 
     
     def get_screenshots_path(self):
@@ -105,12 +129,12 @@ class SeeToSolve():
         self.set_playing(pred_fen)
         if self.playing == "b":
             fen = fen[::-1]
-        new_fen = fen.replace("-", "/")  + " " + self.playing
-        best_move = False
+        self.current_fen = fen.replace("-", "/") + " " + self.playing
+        potential_moves = False
         is_valid = True        
         
         try:
-            stockfish.set_fen_position(new_fen)
+            stockfish.set_fen_position(self.current_fen)
         except StockfishException:
             is_valid = False
             if DEBUG: print("crash when setting fen")
@@ -124,25 +148,29 @@ class SeeToSolve():
             else:
                 print(stockfish.get_board_visual())
         except StockfishException:
-            if DEBUG: print("crash when printing visual")
+            if DEBUG: print("crash when printing visual:",  self.current_fen)
             stockfish.send_quit_command()
             return False
         
         if is_valid:
             try:
-                best_move = stockfish.get_best_move()
+                potential_moves = self.get_good_enough_move()  # (stockfish.get_best_move())
             except StockfishException:
-                if DEBUG: print('crash when getting best move')
+                if DEBUG: print('crash when getting best move',  self.current_fen)
                 stockfish.send_quit_command()
-                best_move = False
+                potential_moves = False
                 self.interval = 5
                 return False
         else:
-            print("not a valid fen (" +  new_fen + ")")
-            
-        
-        if best_move:
-            self.annotated_move(fen, best_move)
+            print("not a valid fen (" +  self.current_fen + ")")
+
+        if potential_moves:
+            i = 0
+            for m in potential_moves:
+                if i > 0:
+                    print(' or ')
+                self.annotated_move(fen, m)
+                i = 1
 
         if self.rename:
             original = self.image_path
@@ -151,6 +179,28 @@ class SeeToSolve():
             self.image_path = new_name
 
         return True
+
+    def get_good_enough_move(self):
+        stockfish.set_fen_position(self.current_fen)
+        good_moves = stockfish.get_top_moves(2)
+
+        # if best move is Mate in 2 or better use it!
+        if len(good_moves) < 2 or (good_moves[0]['Mate'] and good_moves[0]['Mate'] < 3):
+            return [good_moves[0]]
+
+        # if Centipawn doesn't exist return top move
+        if not good_moves[0]['Centipawn'] or not good_moves[1]['Centipawn']:
+            return [good_moves[0]]
+
+        same_advantage = good_moves[0]['Centipawn'] * good_moves[1]['Centipawn'] >= 0
+        move_centipawn_delta = abs(good_moves[0]['Centipawn'] - good_moves[1]['Centipawn'])
+
+        # if Centipawn is similar across moves give options
+        if same_advantage and move_centipawn_delta < 25:
+            return good_moves
+        else:
+            return [good_moves[0]]
+
 
     def check_for_new_image(self):
         new_image = self.get_last_image()
