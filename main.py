@@ -18,7 +18,7 @@ class SeeToSolve():
     def __init__(self):
         self.screenshots_path = self.get_screenshots_path()
         self.image_path = None
-        self.model_path = "board_detector/models/position_predict_stable.pt"
+        self.model_path = "board_detector/models/position_predict_latest.pt"
         self.my_model = torch.jit.load(self.model_path)
         self.rename = True
         self.playing = None

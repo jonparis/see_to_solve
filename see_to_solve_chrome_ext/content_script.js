@@ -2,7 +2,7 @@ chrome.runtime.onMessage.addListener((message, sender, senderResponse) => {
     if (message.name === 'capture') {
         var target = document.getElementById('board-single');
         if (!target) {
-            target = document.getElementsByClassName('round__app__board main-board')[0]
+            target = document.getElementsByClassName('round__app__board main-board')[0].firstElementChild.firstElementChild
         }
         var element, dimensions = {};
 
