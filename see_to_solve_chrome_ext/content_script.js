@@ -9,7 +9,7 @@ chrome.runtime.onMessage.addListener((message, sender, senderResponse) => {
        if (element !== target) {
             element = target;
             dimensions.top = -window.scrollY;
-            
+
             dimensions.left = -window.scrollX;
             
             var elem = target;
@@ -22,7 +22,7 @@ chrome.runtime.onMessage.addListener((message, sender, senderResponse) => {
             dimensions.height = element.offsetHeight;
         }
 
-        var resolution_multiple = 2;  
+        var resolution_multiple = window.devicePixelRatio; // made devicePixelRatio detected to support windows and mac
         dimensions.top = resolution_multiple * dimensions.top;
         dimensions.left = resolution_multiple * dimensions.left;
         dimensions.width = resolution_multiple * dimensions.width;
