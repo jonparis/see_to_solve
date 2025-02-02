@@ -5,12 +5,12 @@ import numpy
 import string
 import time
 import os
-import random
-import ollama
 from board_detector.chessposition import Utils, CONST
 from stockfish import Stockfish, StockfishException
 from configparser import ConfigParser
 import openai
+import base64
+import logging
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
 # Update this path to where you placed stockfish.exe
@@ -32,14 +32,14 @@ class SeeToSolve():
         self.last_fen = None
         self.current_fen = None
         self.interval = 1
-        self.model_to_use = "board_detector" # "ollama" or "openai" or "board_detector"
+        self.model_to_use = "board_detector" # "openai" or "board_detector"
 
     @staticmethod
     def fen_to_positions(fen):
         label_array = []
         for i in fen:
             if str.isdigit(i):
-                label_array += numpy.zeros(int(i), numpy.int16).tolist()
+                label_array += ['0'] * int(i)
             elif i != "-":
                 label_array.append(i)
         return label_array
@@ -76,7 +76,7 @@ class SeeToSolve():
 
         extra_info += ")"
         
-        if not str.isdigit(str(position_array[end_position])):
+        if position_array[end_position] != '0':  # Check if target square is not empty
             end_piece_desc = piece_names[position_array[end_position].lower()]
             print("Move", moving_piece_desc, "on", move[0:2], "to take", end_piece_desc, "on", move[2:4], extra_info)
         else:
@@ -134,24 +134,25 @@ class SeeToSolve():
         return
         
     def recommend_move(self):
-        if self.model_to_use == "ollama":
-            pred_fen = fen = get_fen_ollama(self.image_path)
-        elif self.model_to_use == "openai":
+
+        if self.model_to_use == "openai":
             pred_fen = fen = get_fen_openai(self.image_path)
             if pred_fen == False:
                 return False
-        else:
+            self.current_fen = fen.replace("-", "/")
+        elif self.model_to_use == "board_detector":
             pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_path)
-        
+            self.set_playing(pred_fen)
+            if self.playing == "b":
+                fen = fen[::-1]
+            self.current_fen = fen.replace("-", "/") + " " + self.playing
+
         if pred_fen == self.last_fen:
             return DELETE_DUP
 
         else:
             self.last_fen = pred_fen
-        self.set_playing(pred_fen)
-        if self.playing == "b":
-            fen = fen[::-1]
-        self.current_fen = fen.replace("-", "/") + " " + self.playing
+        
         potential_moves = False
         is_valid = True        
         
@@ -196,7 +197,13 @@ class SeeToSolve():
 
         if self.rename:
             original = self.image_path
-            new_name = os.path.dirname(self.image_path) + "/" + pred_fen + " " +  str(time.time()) + ".png"
+            # Sanitize FEN string for filename
+            safe_fen = pred_fen.replace('/', '-').replace(' ', '_')  # Replace invalid filename characters
+            timestamp = str(time.time())
+            new_name = os.path.join(
+                os.path.dirname(self.image_path),
+                f"{safe_fen}_{timestamp}.png"
+            )
             os.rename(original, new_name)
             self.image_path = new_name
 
@@ -244,35 +251,71 @@ class SeeToSolve():
         if self.interval > 1:
             self.interval -= 1
 
-def get_fen_ollama(image_path):
-    response = ollama.chat(
-        model="llama3.2-vision",
-        messages=[
-            {"role": "user", "content": f"Extract the FEN from the image at {image_path}"}
-        ]
-    )
-    return response['response']
 
 def get_fen_openai(image_path):
-    print(image_path)
     try:
-        # Read image in base64
+        # Read example images and target image
+        with open("board_detector/input/examples/example_1.png", "rb") as img_file:
+            example_1_data = base64.b64encode(img_file.read()).decode('utf-8')
+        with open("board_detector/input/examples/example_2.png", "rb") as img_file:
+            example_2_data = base64.b64encode(img_file.read()).decode('utf-8')
         with open(image_path, "rb") as image_file:
-            import base64
             image_data = base64.b64encode(image_file.read()).decode('utf-8')
         
         response = openai.chat.completions.create(
             model="gpt-4-turbo",
             messages=[
                 {
+                    "role": "system",
+                    "content": "You are an AI that extracts FEN notation from chessboard images. Return only the FEN string with no additional text."
+                },
+                {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": "Analyze this chess board and provide only the FEN notation. Replace the '/' with '-' in the FEN string. Return just the FEN string with no additional text."
+                            "text": "Analyze this chess board and provide the FEN notation."
                         },
                         {
-                            "type": "image_url",  # Changed from "image" to "image_url"
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{example_1_data}"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "role": "assistant",
+                    "content": "r4b1r/pp3pp1/2pk1n1p/q1np4/6NB/1BNP4/PPP1QPPP/R3K2R b"
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Analyze this chess board and provide the FEN notation."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{example_2_data}"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "role": "assistant",
+                    "content": "r2qkb1r/ppp2ppp/4pn2/3P4/2n1P3/2N2P1P/PP3P2/R1BQK2R w"
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Analyze this chess board and provide the FEN notation."
+                        },
+                        {
+                            "type": "image_url",
                             "image_url": {
                                 "url": f"data:image/png;base64,{image_data}"
                             }
@@ -282,12 +325,14 @@ def get_fen_openai(image_path):
             ],
             max_tokens=300
         )
-        print("FEN from openAI")
-        print(response.choices[0].message.content.strip())
-        return response.choices[0].message.content.strip()
+        
+        fen = response.choices[0].message.content.strip()
+        print("FEN from OpenAI:", fen)
+        return fen
     except Exception as e:
         print(f"Error getting FEN from OpenAI: {str(e)}")
         return False
+
 
 if __name__ == '__main__':
     root = tk.Tk()
@@ -300,4 +345,3 @@ if __name__ == '__main__':
         see_to_solve.check_for_new_image()
         time.sleep(see_to_solve.interval - ((time.time() - starttime) % see_to_solve.interval))
         see_to_solve.update_interval()
-
