@@ -6,15 +6,22 @@ import string
 import time
 import os
 import random
+import ollama
 from board_detector.chessposition import Utils, CONST
-from stockfish.stockfish import Stockfish, StockfishException
+from stockfish import Stockfish, StockfishException
 from configparser import ConfigParser
-stockfish = Stockfish()
+import openai
+openai.api_key = os.environ["OPENAI_API_KEY"]
+
+# Update this path to where you placed stockfish.exe
+stockfish = Stockfish(path="C:/Program Files/Stockfish/stockfish.exe")
 
 DELETE_DUP = "delete_dup"
 DEBUG = True
 
+
 class SeeToSolve():
+
     def __init__(self):
         self.screenshots_path = self.get_screenshots_path()
         self.image_path = None
@@ -25,6 +32,7 @@ class SeeToSolve():
         self.last_fen = None
         self.current_fen = None
         self.interval = 1
+        self.model_to_use = "board_detector" # "ollama" or "openai" or "board_detector"
 
     @staticmethod
     def fen_to_positions(fen):
@@ -82,9 +90,14 @@ class SeeToSolve():
             config.read("config.ini")
             try:
                 screenshots_path = config["DEFAULTS"]["screenshots_path"]
+                # Add validation for Windows path
+                if not os.path.exists(screenshots_path):
+                    # Default to Windows Downloads folder
+                    screenshots_path = os.path.join(os.path.expanduser("~"), "Downloads")
+                    self.save_screenshots_path(screenshots_path)
             except:
-                print("Please select the folder where screenshots are saved")
-                screenshots_path = filedialog.askdirectory(title="Please select the folder where screenshots are saved:")
+                # Default to Windows Downloads folder
+                screenshots_path = os.path.join(os.path.expanduser("~"), "Downloads")
                 self.save_screenshots_path(screenshots_path)
         else:
             print("Please select the folder where screenshots are saved")
@@ -121,9 +134,18 @@ class SeeToSolve():
         return
         
     def recommend_move(self):
-        pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_path)
+        if self.model_to_use == "ollama":
+            pred_fen = fen = get_fen_ollama(self.image_path)
+        elif self.model_to_use == "openai":
+            pred_fen = fen = get_fen_openai(self.image_path)
+            if pred_fen == False:
+                return False
+        else:
+            pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_path)
+        
         if pred_fen == self.last_fen:
             return DELETE_DUP
+
         else:
             self.last_fen = pred_fen
         self.set_playing(pred_fen)
@@ -186,7 +208,9 @@ class SeeToSolve():
 
         # if best move is Mate in 2 or better use it!
         if len(good_moves) < 2 or (good_moves[0]['Mate'] and good_moves[0]['Mate'] < 3):
-            return [good_moves[0]]
+            if len(good_moves) > 0:
+                return [good_moves[0]]
+            return False
 
         # if Centipawn doesn't exist return top move
         if not good_moves[0]['Centipawn'] or not good_moves[1]['Centipawn']:
@@ -220,6 +244,50 @@ class SeeToSolve():
         if self.interval > 1:
             self.interval -= 1
 
+def get_fen_ollama(image_path):
+    response = ollama.chat(
+        model="llama3.2-vision",
+        messages=[
+            {"role": "user", "content": f"Extract the FEN from the image at {image_path}"}
+        ]
+    )
+    return response['response']
+
+def get_fen_openai(image_path):
+    print(image_path)
+    try:
+        # Read image in base64
+        with open(image_path, "rb") as image_file:
+            import base64
+            image_data = base64.b64encode(image_file.read()).decode('utf-8')
+        
+        response = openai.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Analyze this chess board and provide only the FEN notation. Replace the '/' with '-' in the FEN string. Return just the FEN string with no additional text."
+                        },
+                        {
+                            "type": "image_url",  # Changed from "image" to "image_url"
+                            "image_url": {
+                                "url": f"data:image/png;base64,{image_data}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=300
+        )
+        print("FEN from openAI")
+        print(response.choices[0].message.content.strip())
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error getting FEN from OpenAI: {str(e)}")
+        return False
 
 if __name__ == '__main__':
     root = tk.Tk()
