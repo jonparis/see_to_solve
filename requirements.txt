@@ -1,0 +1,7 @@
+flask==3.0.0
+flask-cors==4.0.0
+python-dotenv==1.0.0
+stockfish.py==3.1.5
+torch==2.1.0
+opencv-python==4.8.0.76
+openai==1.1.0

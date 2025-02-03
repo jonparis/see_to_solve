@@ -2,30 +2,133 @@ import tkinter as tk
 from tkinter import filedialog
 import torch
 import numpy
+import cv2
 import string
 import time
 import os
-from board_detector.chessposition import Utils, CONST
 from stockfish import Stockfish, StockfishException
 from configparser import ConfigParser
+
 import openai
 import base64
-import logging
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
 # Update this path to where you placed stockfish.exe
-stockfish = Stockfish(path="C:/Program Files/Stockfish/stockfish.exe")
+# comment out for Mac
+stockfish = Stockfish(path="stockfish.exe")
 
 DELETE_DUP = "delete_dup"
 DEBUG = True
 
+
+class CONST:
+    PIECES = ["k", "q", "r", "b", "n", "p", "K", "Q", "R", "B", "N", "P"]
+
+    PIECES_LEN = 12
+    img_dim = 25
+
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device  = torch.device("cpu")
+
+class Utils():
+    @staticmethod
+    def playing_black(fen):
+        '''
+        returns
+        b, if playing black
+        w, if paying white
+        None, if unknown
+        '''
+        balance = 0  # when balance < 0 assume from black perspective
+        n = 1
+        total = 0
+
+        fen_array = fen.split("-")
+        for row in range(0,8):
+            if row > 3:
+                n = -1
+            for i in fen_array[row]:
+                if i.islower():
+                    total += 1
+                    balance += n
+                elif i.isupper():
+                    balance -= n
+                    total += 1
+        if total > 10:
+            if balance < -2:
+                return "b"
+            elif balance > 2:
+                return "w"
+        return None
+    
+    @staticmethod
+    def lb_to_fen(label):
+        s = ''
+        count = 0
+        for i in range(len(label)):
+            if i % 8 == 0:
+                if count != 0:
+                    s = s + str(count)
+                    count = 0
+                s = s + '-'
+            if label[i] == 0:
+                count = count + 1
+            else:
+                if count != 0:
+                    s = s + str(count)
+                    count = 0
+
+                if 0 < label[i] <= CONST.PIECES_LEN:
+                    s = s + CONST.PIECES[label[i] - 1]
+                else:
+                    print('Invalid Error#######################################')
+        if count != 0:
+            s = s + str(count)
+        return s[1:]
+    
+    @staticmethod
+    def img_processing(img):
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img_shrink = cv2.resize(img_gray, (200, 200))
+        box_list = Utils.blockshaped(img_shrink, CONST.img_dim, CONST.img_dim)
+        flatten_list = box_list.reshape(box_list.shape[0], -1)
+        return flatten_list
+    
+    @staticmethod
+    def blockshaped(arr, nrows, ncols):
+        h, w = arr.shape
+        return (arr.reshape(h // nrows, nrows, -1, ncols)
+                .swapaxes(1, 2)
+                .reshape(-1, nrows, ncols))
+    
+    @staticmethod
+    def pred_single_img(model_path, image_path):
+        my_model = torch.jit.load(model_path)
+        my_model.to(CONST.device)  # make sure on device
+        my_model.eval()
+
+        img_unprocessed = cv2.imread(image_path)
+        my_image = Utils.img_processing(img_unprocessed)
+
+        img_array = numpy.array(my_image)  # Convert to numpy array first
+        with torch.no_grad():  # Add this for inference
+            my_pred_label = my_model(torch.FloatTensor(img_array).to(CONST.device))
+            my_pred_label = torch.log_softmax(my_pred_label, dim=1)  # Explicitly specify dimension
+            my_pred_label = my_pred_label.argmax(1).cpu().numpy().astype(numpy.int32).tolist()
+
+        return Utils.lb_to_fen(my_pred_label)
 
 class SeeToSolve():
 
     def __init__(self):
         self.screenshots_path = self.get_screenshots_path()
         self.image_path = None
-        self.model_path = "board_detector/models/position_predict_latest.pt"
+        self.model_path = "position_predict.pt"
         self.my_model = torch.jit.load(self.model_path)
         self.rename = True
         self.playing = None
@@ -81,6 +184,14 @@ class SeeToSolve():
             print("Move", moving_piece_desc, "on", move[0:2], "to take", end_piece_desc, "on", move[2:4], extra_info)
         else:
             print("Move", moving_piece_desc, "on", move[0:2], "to", move[2:4], extra_info)
+        
+        return {
+            'piece': moving_piece_desc,
+            'from_square': move[0:2],
+            'to_square': move[2:4],
+            'centipawn': centipawn,
+            'mate': mate_in
+        }
 
     
     def get_screenshots_path(self):
