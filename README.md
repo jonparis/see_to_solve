@@ -13,6 +13,15 @@ Install the Chrome Extension
 3. Load unpacked
 4. Select the directory of the "see_to_solve_chrome_ext"
 
+```
+On Windows, Install Stockfish from [here](https://github.com/official-stockfish/Stockfish/releases) 
+and place the stockfish.exe file in the root directory of the project.
+
+1. Go to Extensions. chrome://extensions/
+2. Enable "Developer mode"
+3. Load unpacked
+4. Select the directory of the "see_to_solve_chrome_ext"
+
 
 ## How to use
 

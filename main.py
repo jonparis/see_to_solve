@@ -8,10 +8,14 @@ import time
 import os
 from stockfish import Stockfish, StockfishException
 from configparser import ConfigParser
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 import openai
 import base64
 openai.api_key = os.environ["OPENAI_API_KEY"]
+
+
 
 # Update this path to where you placed stockfish.exe
 # comment out for Mac
@@ -106,13 +110,22 @@ class Utils():
                 .swapaxes(1, 2)
                 .reshape(-1, nrows, ncols))
     
+        return Utils.lb_to_fen(my_pred_label)
+    
     @staticmethod
-    def pred_single_img(model_path, image_path):
+    def pred_single_img(model_path, file):
         my_model = torch.jit.load(model_path)
         my_model.to(CONST.device)  # make sure on device
         my_model.eval()
 
-        img_unprocessed = cv2.imread(image_path)
+        # Read the file's bytes directly into memory
+        file_bytes = file.read()
+
+        # Convert the bytes data to a NumPy array
+        np_arr = numpy.frombuffer(file_bytes, numpy.uint8)
+
+        # Decode the NumPy array to an image
+        img_unprocessed = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         my_image = Utils.img_processing(img_unprocessed)
 
         img_array = numpy.array(my_image)  # Convert to numpy array first
@@ -126,11 +139,11 @@ class Utils():
 class SeeToSolve():
 
     def __init__(self):
-        self.screenshots_path = self.get_screenshots_path()
         self.image_path = None
+        self.image_file = None
         self.model_path = "position_predict.pt"
         self.my_model = torch.jit.load(self.model_path)
-        self.rename = True
+        self.print_board = True
         self.playing = None
         self.last_fen = None
         self.current_fen = None
@@ -181,48 +194,12 @@ class SeeToSolve():
         
         if position_array[end_position] != '0':  # Check if target square is not empty
             end_piece_desc = piece_names[position_array[end_position].lower()]
-            print("Move", moving_piece_desc, "on", move[0:2], "to take", end_piece_desc, "on", move[2:4], extra_info)
+            response = "Move " + moving_piece_desc + " on " + move[0:2] + " to take " + end_piece_desc + " on " + move[2:4] + " " + extra_info
         else:
-            print("Move", moving_piece_desc, "on", move[0:2], "to", move[2:4], extra_info)
+            response = "Move " + moving_piece_desc + " on " + move[0:2] + " to " + move[2:4] + " " + extra_info
         
-        return {
-            'piece': moving_piece_desc,
-            'from_square': move[0:2],
-            'to_square': move[2:4],
-            'centipawn': centipawn,
-            'mate': mate_in
-        }
-
-    
-    def get_screenshots_path(self):
-        config = ConfigParser()
-
-        if os.path.exists("config.ini"):
-            config.read("config.ini")
-            try:
-                screenshots_path = config["DEFAULTS"]["screenshots_path"]
-                # Add validation for Windows path
-                if not os.path.exists(screenshots_path):
-                    # Default to Windows Downloads folder
-                    screenshots_path = os.path.join(os.path.expanduser("~"), "Downloads")
-                    self.save_screenshots_path(screenshots_path)
-            except:
-                # Default to Windows Downloads folder
-                screenshots_path = os.path.join(os.path.expanduser("~"), "Downloads")
-                self.save_screenshots_path(screenshots_path)
-        else:
-            print("Please select the folder where screenshots are saved")
-            screenshots_path = filedialog.askdirectory(title="Please select the folder where screenshots are saved:")
-            self.save_screenshots_path(screenshots_path)
-
-        return screenshots_path
+        return(response)
    
-    def save_screenshots_path(self, screenshots_path):
-        config = ConfigParser()
-        config["DEFAULTS"] = {"screenshots_path": screenshots_path}
-        with open('config.ini', 'w') as conf:
-            config.write(conf)
-
     def get_last_image(self, image_ext=('jpg','jpeg','png')):
             files = [os.path.join(self.screenshots_path, filename) for filename in os.listdir(self.screenshots_path)]
             valid = [f for f in files if '.' in f and f.rsplit('.',1)[-1] in image_ext and os.path.isfile(f)]
@@ -243,6 +220,19 @@ class SeeToSolve():
                 print("Playing:", playing_black_or_white)
             self.playing = playing_black_or_white
         return
+    
+    def print_board_to_console(self):
+        try:
+            if self.playing == "b": 
+                print(stockfish.get_board_visual(False))
+            else:
+                print(stockfish.get_board_visual())
+        except StockfishException:
+            if DEBUG: 
+                print("crash when printing visual:",  self.current_fen)
+                response = {"error": "unexpected error"}
+            stockfish.send_quit_command()
+            return response    
         
     def recommend_move(self):
 
@@ -252,16 +242,13 @@ class SeeToSolve():
                 return False
             self.current_fen = fen.replace("-", "/")
         elif self.model_to_use == "board_detector":
-            pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_path)
+            pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_file)
             self.set_playing(pred_fen)
             if self.playing == "b":
                 fen = fen[::-1]
             self.current_fen = fen.replace("-", "/") + " " + self.playing
 
-        if pred_fen == self.last_fen:
-            return DELETE_DUP
-
-        else:
+        if pred_fen != self.last_fen:
             self.last_fen = pred_fen
         
         potential_moves = False
@@ -276,15 +263,7 @@ class SeeToSolve():
             self.interval = 5
             return False
 
-        try:
-            if self.playing == "b": 
-                print(stockfish.get_board_visual(False))
-            else:
-                print(stockfish.get_board_visual())
-        except StockfishException:
-            if DEBUG: print("crash when printing visual:",  self.current_fen)
-            stockfish.send_quit_command()
-            return False
+        if self.print_board: self.print_board_to_console()
         
         if is_valid:
             try:
@@ -294,31 +273,22 @@ class SeeToSolve():
                 stockfish.send_quit_command()
                 potential_moves = False
                 self.interval = 5
+                response = {"error": "unexpected error"}
                 return False
         else:
-            print("not a valid fen (" +  self.current_fen + ")")
+            response = {"error": "not a valid fen (" +  self.current_fen + ")"}
+            print(response)
 
+        response = ""
         if potential_moves:
             i = 0
             for m in potential_moves:
                 if i > 0:
                     print(' or ')
-                self.annotated_move(fen, m)
+                response += self.annotated_move(fen, m) + "\n\n"
                 i = 1
 
-        if self.rename:
-            original = self.image_path
-            # Sanitize FEN string for filename
-            safe_fen = pred_fen.replace('/', '-').replace(' ', '_')  # Replace invalid filename characters
-            timestamp = str(time.time())
-            new_name = os.path.join(
-                os.path.dirname(self.image_path),
-                f"{safe_fen}_{timestamp}.png"
-            )
-            os.rename(original, new_name)
-            self.image_path = new_name
-
-        return True
+        return response
 
     def get_good_enough_move(self):
         stockfish.set_fen_position(self.current_fen)
@@ -342,26 +312,6 @@ class SeeToSolve():
             return good_moves
         else:
             return [good_moves[0]]
-
-
-    def check_for_new_image(self):
-        new_image = self.get_last_image()
-        if new_image and (self.image_path is None or new_image.split()[0] != self.image_path.split()[0]):
-            self.image_path = new_image
-            if self.recommend_move() == DELETE_DUP:
-                os.remove(new_image)  # Delete image if we have seen it before
-    
-    def fix_images(self):
-        files = [os.path.join(self.screenshots_path, filename) for filename in os.listdir(self.screenshots_path)]
-        for original in files:
-            filename = os.path.basename(original)
-            new_name = os.path.dirname(original) + "/" + filename.replace("/", "-").replace(":", "-")
-            os.rename(original, new_name)
-
-    def update_interval(self):
-        if self.interval > 1:
-            self.interval -= 1
-
 
 def get_fen_openai(image_path):
     try:
@@ -444,15 +394,34 @@ def get_fen_openai(image_path):
         print(f"Error getting FEN from OpenAI: {str(e)}")
         return False
 
-
-if __name__ == '__main__':
+def run_in_console(SeeToSolve):
     root = tk.Tk()
     root.withdraw()
     see_to_solve = SeeToSolve()
     starttime = time.time()
     see_to_solve.interval
-    while True:
-        # see_to_solve.fix_images()  # use to fix images created through other mechanism
-        see_to_solve.check_for_new_image()
-        time.sleep(see_to_solve.interval - ((time.time() - starttime) % see_to_solve.interval))
-        see_to_solve.update_interval()
+
+app = Flask(__name__)
+see_to_solve = SeeToSolve()
+CORS(app)  # Enables Cross-Origin Resource Sharing (CORS) for all routes
+
+@app.route('/process-image', methods=['POST'])
+def process_image():
+    # Check if the request contains an 'image' file.
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image part in the request'}), 400
+
+    file = request.files['image']
+    
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    see_to_solve.image_file = file
+    
+    text_response = see_to_solve.recommend_move()
+
+    return jsonify({'text': text_response})
+
+if __name__ == '__main__':
+    app.run(port=5000, debug=True)
+    #run_in_console(SeeToSolve)
