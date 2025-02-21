@@ -11,11 +11,6 @@ from configparser import ConfigParser
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-import openai
-import base64
-# openai.api_key = os.environ["OPENAI_API_KEY"]
-
-
 
 # Update this path to where you placed stockfish.exe
 # comment out for Mac
@@ -147,8 +142,6 @@ class SeeToSolve():
         self.playing = None
         self.last_fen = None
         self.current_fen = None
-        self.interval = 1
-        self.model_to_use = "board_detector" # "openai" or "board_detector"
 
     @staticmethod
     def fen_to_positions(fen):
@@ -194,10 +187,10 @@ class SeeToSolve():
         
         if position_array[end_position] != '0':  # Check if target square is not empty
             end_piece_desc = piece_names[position_array[end_position].lower()]
-            response = "Move " + moving_piece_desc + " on " + move[0:2] + " to take " + end_piece_desc + " on " + move[2:4] + " " + extra_info
+            response = "Take " + end_piece_desc + " (" + move[2:4] + ") with " + moving_piece_desc + " (" + move[0:2] + ") " + extra_info
         else:
-            response = "Move " + moving_piece_desc + " on " + move[0:2] + " to " + move[2:4] + " " + extra_info
-        
+            response = "Move " + moving_piece_desc + " (" + move[0:2] + ") to (" + move[2:4] + ") " + extra_info
+        print(response)
         return(response)
    
     def get_last_image(self, image_ext=('jpg','jpeg','png')):
@@ -235,18 +228,11 @@ class SeeToSolve():
             return response    
         
     def recommend_move(self):
-
-        if self.model_to_use == "openai":
-            pred_fen = fen = get_fen_openai(self.image_path)
-            if pred_fen == False:
-                return False
-            self.current_fen = fen.replace("-", "/")
-        elif self.model_to_use == "board_detector":
-            pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_file)
-            self.set_playing(pred_fen)
-            if self.playing == "b":
-                fen = fen[::-1]
-            self.current_fen = fen.replace("-", "/") + " " + self.playing
+        pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_file)
+        self.set_playing(pred_fen)
+        if self.playing == "b":
+            fen = fen[::-1]
+        self.current_fen = fen.replace("-", "/") + " " + self.playing
 
         if pred_fen != self.last_fen:
             self.last_fen = pred_fen
@@ -260,7 +246,6 @@ class SeeToSolve():
             is_valid = False
             if DEBUG: print("crash when setting fen")
             stockfish.send_quit_command()
-            self.interval = 5
             return False
 
         if self.print_board: self.print_board_to_console()
@@ -272,7 +257,6 @@ class SeeToSolve():
                 if DEBUG: print('crash when getting best move',  self.current_fen)
                 stockfish.send_quit_command()
                 potential_moves = False
-                self.interval = 5
                 response = {"error": "unexpected error"}
                 return False
         else:
@@ -285,7 +269,8 @@ class SeeToSolve():
             for m in potential_moves:
                 if i > 0:
                     print(' or ')
-                response += self.annotated_move(fen, m) + "\n\n"
+                    response += " or \n\n"
+                response += self.annotated_move(fen, m)
                 i = 1
 
         return response
@@ -313,94 +298,6 @@ class SeeToSolve():
         else:
             return [good_moves[0]]
 
-def get_fen_openai(image_path):
-    try:
-        # Read example images and target image
-        with open("board_detector/input/examples/example_1.png", "rb") as img_file:
-            example_1_data = base64.b64encode(img_file.read()).decode('utf-8')
-        with open("board_detector/input/examples/example_2.png", "rb") as img_file:
-            example_2_data = base64.b64encode(img_file.read()).decode('utf-8')
-        with open(image_path, "rb") as image_file:
-            image_data = base64.b64encode(image_file.read()).decode('utf-8')
-        
-        response = openai.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an AI that extracts FEN notation from chessboard images. Return only the FEN string with no additional text."
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Analyze this chess board and provide the FEN notation."
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{example_1_data}"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "role": "assistant",
-                    "content": "r4b1r/pp3pp1/2pk1n1p/q1np4/6NB/1BNP4/PPP1QPPP/R3K2R b"
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Analyze this chess board and provide the FEN notation."
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{example_2_data}"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "role": "assistant",
-                    "content": "r2qkb1r/ppp2ppp/4pn2/3P4/2n1P3/2N2P1P/PP3P2/R1BQK2R w"
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Analyze this chess board and provide the FEN notation."
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{image_data}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=300
-        )
-        
-        fen = response.choices[0].message.content.strip()
-        print("FEN from OpenAI:", fen)
-        return fen
-    except Exception as e:
-        print(f"Error getting FEN from OpenAI: {str(e)}")
-        return False
-
-def run_in_console(SeeToSolve):
-    root = tk.Tk()
-    root.withdraw()
-    see_to_solve = SeeToSolve()
-    starttime = time.time()
-    see_to_solve.interval
-
 app = Flask(__name__)
 see_to_solve = SeeToSolve()
 CORS(app)  # Enables Cross-Origin Resource Sharing (CORS) for all routes
@@ -424,4 +321,3 @@ def process_image():
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
-    #run_in_console(SeeToSolve)

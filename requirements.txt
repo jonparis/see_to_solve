@@ -4,4 +4,3 @@ opencv-python
 stockfish
 Flask
 flask-cors
-openai
