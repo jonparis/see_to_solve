@@ -13,7 +13,7 @@ from flask_cors import CORS
 
 import openai
 import base64
-openai.api_key = os.environ["OPENAI_API_KEY"]
+# openai.api_key = os.environ["OPENAI_API_KEY"]
 
 
 
