@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         formData.append('image', blob, 'screenshot.png');
 
         // Send the cropped image to the Python service.
-        fetch('http://localhost:5000/process-image', {
+        fetch('http://127.0.0.1:5000/process-image', {
           method: 'POST',
           body: formData
         })

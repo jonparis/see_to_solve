@@ -13,6 +13,8 @@ from flask_cors import CORS
 # Update this path to where you placed stockfish.exe
 if platform.system() == "Windows":
     stockfish = Stockfish(path="stockfish.exe")
+else:
+    stockfish = Stockfish()
 
 DELETE_DUP = "delete_dup"
 DEBUG = True
