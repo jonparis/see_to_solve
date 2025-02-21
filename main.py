@@ -1,11 +1,9 @@
-import tkinter as tk
-from tkinter import filedialog
 import torch
 import numpy
 import cv2
 import string
-import time
 import os
+import platform
 from stockfish import Stockfish, StockfishException
 from configparser import ConfigParser
 from flask import Flask, request, jsonify
@@ -13,8 +11,8 @@ from flask_cors import CORS
 
 
 # Update this path to where you placed stockfish.exe
-# comment out for Mac
-stockfish = Stockfish(path="stockfish.exe")
+if platform.system() == "Windows":
+    stockfish = Stockfish(path="stockfish.exe")
 
 DELETE_DUP = "delete_dup"
 DEBUG = True
