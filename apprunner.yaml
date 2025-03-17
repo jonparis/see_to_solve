@@ -4,7 +4,8 @@ build:
   commands:
     pre-build:
       - mkdir -p bin
-      - wget https://github.com/official-stockfish/Stockfish/releases/download/sf_17/stockfish-linux-x86-64-avx2 -O bin/stockfish
+      - git clone --branch sf_17 --depth 1 https://github.com/official-stockfish/Stockfish.git
+      - cd Stockfish/src && make -j build ARCH=x86-64-modern && cp stockfish ../../../bin/ && cd ../../ && rm -rf Stockfish
       - chmod +x bin/stockfish
     build:
       - pip install -r requirements.txt
