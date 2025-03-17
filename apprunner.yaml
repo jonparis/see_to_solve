@@ -3,6 +3,8 @@ runtime: python311
 build:
   commands:
     pre-build:
+      - yum update -y
+      - yum groupinstall -y "Development Tools"
       - mkdir -p bin
       - git clone --branch sf_17 --depth 1 https://github.com/official-stockfish/Stockfish.git
       - cd Stockfish/src && make -j build ARCH=x86-64-modern && cp stockfish ../../../bin/ && cd ../../ && rm -rf Stockfish
