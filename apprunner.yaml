@@ -6,7 +6,7 @@ build:
       - yum update -y
       - yum install -y gcc gcc-c++ make git
       - mkdir -p bin
-      - git clone https://github.com/official-stockfish/Stockfish.git && cd Stockfish && git checkout e0bfc4b69bbe928d6f474a46560bcc3b3f6709aa && cd src && make ARCH=x86-64-sse41-popcnt && ls -la && cp stockfish ../../bin/ && cd ../.. && rm -rf Stockfish && chmod +x bin/stockfish
+      - git clone https://github.com/official-stockfish/Stockfish.git && cd Stockfish && git checkout e0bfc4b69bbe928d6f474a46560bcc3b3f6709aa && cd src && make -j build ARCH=x86-64-sse41-popcnt && ls -la && cp stockfish ../../bin/ && cd ../.. && rm -rf Stockfish && chmod +x bin/stockfish
     build:
       - pip install -r requirements.txt
 run:
