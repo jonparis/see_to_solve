@@ -14,8 +14,8 @@ from flask_cors import CORS
 if platform.system() == "Windows":
     stockfish = Stockfish(path="stockfish.exe")
 elif platform.system() == "Linux":
-    # For App Runner (Amazon Linux 2)
-    stockfish = Stockfish(path="/usr/local/bin/stockfish")
+    # For AWS App Runner
+    stockfish = Stockfish(path="bin/stockfish")
 else:
     stockfish = Stockfish()
 
