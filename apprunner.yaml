@@ -2,15 +2,22 @@ version: 1.0
 runtime: python311
 build:
   commands:
-    pre-build:
-      - yum update -y
-      - yum install -y gcc gcc-c++ make git
-      - mkdir -p bin
-      - git clone https://github.com/official-stockfish/Stockfish.git && cd Stockfish && git checkout e0bfc4b69bbe928d6f474a46560bcc3b3f6709aa && cd src && make -j build ARCH=x86-64-sse41-popcnt && ls -la && cp stockfish ../../bin/ && cd ../.. && rm -rf Stockfish && chmod +x bin/stockfish
-    build:
-      - pip install -r requirements.txt
+    - yum update -y
+    - yum install -y gcc gcc-c++ make git glibc-static libstdc++-static
+    - mkdir -p bin
+    - git clone https://github.com/official-stockfish/Stockfish.git && \
+      cd Stockfish && \
+      git checkout e0bfc4b69bbe928d6f474a46560bcc3b3f6709aa && \
+      cd src && \
+      make -j $(nproc) ARCH=x86-64-sse41-popcnt && \
+      ls -la && \
+      cp stockfish ../../bin/ && \
+      cd ../.. && \
+      chmod +x bin/stockfish && \
+      rm -rf Stockfish
+    - pip install -r requirements.txt
 run:
   runtime-version: 3.11.11
   command: python main.py
   network:
-    port: 5000 
+    port: 5000
