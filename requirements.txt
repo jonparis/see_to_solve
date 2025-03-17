@@ -1,6 +1,8 @@
-torch==2.2.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
-numpy==1.24.3
-opencv-python-headless==4.8.1.78
-stockfish==3.28.0
-Flask==3.0.2
-flask-cors==4.0.0
+torch
+torchvision
+torchaudio
+numpy
+opencv-python-headless
+stockfish
+Flask
+flask-cors
