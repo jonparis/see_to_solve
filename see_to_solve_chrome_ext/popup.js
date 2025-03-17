@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const responseDiv = document.getElementById('responseMessage');
+  const serviceUrl = "http://127.0.0.1:8080/";
 
   try {
     // Query the active tab in the current window.
@@ -10,7 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     const tabId = tab.id;
 
-    // Execute a script in the active tab to compute the target element’s dimensions.
+    // Execute a script in the active tab to compute the target element's dimensions.
     const [{ result: dimensions }] = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => {
@@ -64,7 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Convert the canvas to a data URL and then to a Blob.
         const croppedDataUrl = canvas.toDataURL("image/png");
-
+        
         // Helper function: Convert data URL to Blob.
         function dataURLtoBlob(dataurl) {
           const arr = dataurl.split(',');
@@ -86,16 +87,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         formData.append('image', blob, 'screenshot.png');
 
         // Send the cropped image to the Python service.
-        fetch('https://3fmecndpbf.us-east-2.awsapprunner.com/process-image', {
+        fetch(serviceUrl + 'process-image', {
           method: 'POST',
-          body: formData
+          body: formData,
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json'
+          }
         })
-          .then(response => response.json())
+          .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+          })
           .then(data => {
-            responseDiv.textContent = data.text;
+            console.log('Received data:', data);
+            if (data.error) {
+              responseDiv.textContent = 'Error: ' + data.error;
+            } else {
+              responseDiv.textContent = data.text;
+            }
           })
           .catch(error => {
-            responseDiv.textContent = 'Error: ' + error;
+            console.error('Fetch error:', error);
+            responseDiv.textContent = 'Error: ' + error.message;
           });
       };
 

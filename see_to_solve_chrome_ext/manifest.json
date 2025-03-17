@@ -26,9 +26,7 @@
         "https://*.chess.com/*",
         "https://lichess.org/*",
         "https://*.lichess.org/*",
-        "http://localhost:5000/",
-        "http://jonparis.pythonanywhere.com/",
-        "https://3fmecndpbf.us-east-2.awsapprunner.com/"
+        "http://127.0.0.1:8080/"
     ],
     "content_scripts": [
         {
