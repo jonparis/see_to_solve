@@ -2,20 +2,14 @@ version: 1.0
 runtime: python311
 build:
   commands:
-    - yum update -y
-    - yum install -y gcc gcc-c++ make git glibc-static libstdc++-static
-    - mkdir -p bin
-    - git clone https://github.com/official-stockfish/Stockfish.git && \
-      cd Stockfish && \
-      git checkout e0bfc4b69bbe928d6f474a46560bcc3b3f6709aa && \
-      cd src && \
-      make -j $(nproc) ARCH=x86-64-sse41-popcnt && \
-      ls -la && \
-      cp stockfish ../../bin/ && \
-      cd ../.. && \
-      chmod +x bin/stockfish && \
-      rm -rf Stockfish
-    - pip install -r requirements.txt
+    pre-build:
+      - yum update -y
+      - yum install -y epel-release
+      - yum install -y stockfish
+      - mkdir -p bin
+      - cp /usr/bin/stockfish bin/
+    build:
+      - pip install -r requirements.txt
 run:
   runtime-version: 3.11.11
   command: python main.py
