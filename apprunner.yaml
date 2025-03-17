@@ -4,10 +4,13 @@ build:
   commands:
     pre-build:
       - yum update -y
-      - yum install -y epel-release
-      - yum install -y stockfish
+      - yum install -y wget
       - mkdir -p bin
-      - cp /usr/bin/stockfish bin/
+      - wget https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64-avx2.zip
+      - unzip stockfish-ubuntu-x86-64-avx2.zip
+      - mv stockfish-ubuntu-x86-64-avx2/stockfish-ubuntu-x86-64-avx2 bin/stockfish
+      - chmod +x bin/stockfish
+      - rm -rf stockfish-ubuntu-x86-64-avx2.zip stockfish-ubuntu-x86-64-avx2
     build:
       - pip install -r requirements.txt
 run:
