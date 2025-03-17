@@ -13,6 +13,9 @@ from flask_cors import CORS
 # Update this path to where you placed stockfish.exe
 if platform.system() == "Windows":
     stockfish = Stockfish(path="stockfish.exe")
+elif platform.system() == "Linux":
+    # For App Runner (Amazon Linux 2)
+    stockfish = Stockfish(path="/usr/local/bin/stockfish")
 else:
     stockfish = Stockfish()
 
@@ -246,6 +249,8 @@ class SeeToSolve():
             is_valid = False
             if DEBUG: print("crash when setting fen")
             stockfish.send_quit_command()
+            potential_moves = False
+            response = {"error": "unexpected error"}
             return False
 
         if self.print_board: self.print_board_to_console()
