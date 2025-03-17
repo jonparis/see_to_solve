@@ -27,7 +27,8 @@
         "https://lichess.org/*",
         "https://*.lichess.org/*",
         "http://localhost:5000/",
-        "http://jonparis.pythonanywhere.com/"
+        "http://jonparis.pythonanywhere.com/",
+        "https://3fmecndpbf.us-east-2.awsapprunner.com/"
     ],
     "content_scripts": [
         {

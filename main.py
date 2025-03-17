@@ -187,9 +187,9 @@ class SeeToSolve():
         
         if position_array[end_position] != '0':  # Check if target square is not empty
             end_piece_desc = piece_names[position_array[end_position].lower()]
-            response = "Take " + end_piece_desc + " (" + move[2:4] + ") with " + moving_piece_desc + " (" + move[0:2] + ") " + extra_info
+            response = "Take " + move[2:4] + " " + end_piece_desc + " with " + move[0:2] + " " + moving_piece_desc + " " + extra_info
         else:
-            response = "Move " + moving_piece_desc + " (" + move[0:2] + ") to (" + move[2:4] + ") " + extra_info
+            response = move[0:2] + " " + moving_piece_desc + " to " + move[2:4] + " " + extra_info
         print(response)
         return(response)
    
