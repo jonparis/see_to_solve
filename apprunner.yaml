@@ -4,11 +4,11 @@ build:
   commands:
     pre-build:
       - yum update -y
-      - yum groupinstall -y "Development Tools"
+      - yum install -y gcc gcc-c++ make git
       - mkdir -p bin
       - git clone --branch sf_17 --depth 1 https://github.com/official-stockfish/Stockfish.git
       - cd Stockfish/src
-      - make build ARCH=x86-64-modern
+      - make ARCH=x86-64-modern
       - cp stockfish ../../bin/
       - cd ../..
       - rm -rf Stockfish
