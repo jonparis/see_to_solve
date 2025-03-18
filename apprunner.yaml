@@ -16,6 +16,8 @@ build:
       - chmod +x bin/stockfish
       - rm -rf stockfish.tar stockfish
       - bin/stockfish --version
+      # Make sure bin directory is in the app directory
+      - cp -r bin /app/
     build:
       - cd /app && pip install -r requirements.txt
 run:
