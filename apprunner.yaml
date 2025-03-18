@@ -16,7 +16,7 @@ build:
       - rm -rf stockfish.tar stockfish
       - bin/stockfish --version
     build:
-      - pip install -r requirements.txt
+      - cd /app && pip install -r requirements.txt
 run:
   runtime-version: 3.11.11
   command: python main.py
