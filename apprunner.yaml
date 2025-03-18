@@ -6,11 +6,11 @@ build:
       - yum update -y
       - yum install -y wget
       - mkdir -p bin
-      - wget https://github.com/official-stockfish/Stockfish/releases/download/sf_17/stockfish-ubuntu-x86-64-avx2.tar
-      - tar -xf stockfish-ubuntu-x86-64-avx2.tar
-      - mv stockfish-ubuntu-x86-64-avx2/stockfish-ubuntu-x86-64-avx2 bin/stockfish
+      - wget -O stockfish.tar https://github.com/official-stockfish/Stockfish/releases/download/sf_17/stockfish-ubuntu-x86-64-avx2.tar
+      - tar -xf stockfish.tar
+      - mv stockfish/stockfish-ubuntu-x86-64-avx2 bin/stockfish
       - chmod +x bin/stockfish
-      - rm -rf stockfish-ubuntu-x86-64-avx2.tar stockfish-ubuntu-x86-64-avx2
+      - rm -rf stockfish.tar stockfish
       - bin/stockfish --version
     build:
       - pip install -r requirements.txt
