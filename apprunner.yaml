@@ -15,16 +15,14 @@ build:
       - mv stockfish/stockfish-ubuntu-x86-64 bin/stockfish
       - chmod +x bin/stockfish
       - rm -rf stockfish.tar stockfish
-      - bin/stockfish --version
-      # Make sure bin directory is in the app directory
-      - cp -r bin /app/
+      - bin/stockfish "--version"
     build:
       - cd /app && pip install -r requirements.txt
 run:
   runtime-version: 3.11.11
-  command: /usr/bin/python3 -c "from main import app; app.run(host='0.0.0.0', port=5000)"
+  command: /usr/bin/python3 -c "from main import app; app.run(host='0.0.0.0', port=8080)"
   network:
-    port: 5000
+    port: 8080
   env:
     - name: FLASK_APP
       value: main.py
