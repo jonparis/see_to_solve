@@ -20,6 +20,13 @@ build:
       - cd /app && pip install -r requirements.txt
 run:
   runtime-version: 3.11.11
-  command: python main.py
+  command: /usr/bin/python3 main.py
   network:
     port: 5000
+  env:
+    - name: FLASK_APP
+      value: main.py
+    - name: FLASK_ENV
+      value: production
+    - name: PYTHONUNBUFFERED
+      value: "1"
