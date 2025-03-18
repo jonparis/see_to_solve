@@ -7,6 +7,7 @@ build:
       - yum install -y wget
       - yum install -y gcc gcc-c++ make git glibc-static libstdc++-static
       - yum install -y libstdc++ libstdc++-devel
+      - yum install -y python3-pip
       # Try to get a newer version of Stockfish that might be more compatible
       - mkdir -p bin
       - wget -O stockfish.tar https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64.tar
