@@ -20,22 +20,20 @@ else:
     stockfish = Stockfish()
 
 DELETE_DUP = "delete_dup"
-DEBUG = True
+DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
 
 
 class CONST:
     PIECES = ["k", "q", "r", "b", "n", "p", "K", "Q", "R", "B", "N", "P"]
-
     PIECES_LEN = 12
     img_dim = 25
-
 
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
     elif torch.backends.mps.is_available():
         device = torch.device("mps")
     else:
-        device  = torch.device("cpu")
+        device = torch.device("cpu")
 
 class Utils():
     @staticmethod
@@ -135,7 +133,6 @@ class Utils():
         return Utils.lb_to_fen(my_pred_label)
 
 class SeeToSolve():
-
     def __init__(self):
         self.image_path = None
         self.image_file = None
@@ -325,4 +322,4 @@ def process_image():
     return jsonify({'text': text_response})
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=DEBUG)
