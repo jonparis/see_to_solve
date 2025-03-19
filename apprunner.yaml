@@ -1,14 +1,9 @@
 version: 1.0
-runtime: python311
+runtime: python3
 build:
   commands:
-    pre-build:
-      - yum update -y
-      - yum install -y wget
-      - yum install -y gcc gcc-c++ make git glibc-static libstdc++-static
-      - yum install -y libstdc++ libstdc++-devel
-      - yum install -y python3-pip
-      # Try to get a newer version of Stockfish that might be more compatible
+    build:
+      - pip install -r requirements.txt
       - mkdir -p bin
       - wget -O stockfish.tar https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64.tar
       - tar -xf stockfish.tar
@@ -16,12 +11,10 @@ build:
       - chmod +x bin/stockfish
       - rm -rf stockfish.tar stockfish
       - bin/stockfish "--version"
-    build:
-      - pip install -r requirements.txt
       - pip install gunicorn
 run:
   runtime-version: 3.11.11
-  command: gunicorn --bind 0.0.0.0:8080 main:app --log-file -
+  command: gunicorn --bind 0.0.0.0:8080 main:app --workers 4 --timeout 120 --log-file - --access-logfile - --error-logfile -
   network:
     port: 8080
   env:
@@ -30,6 +23,8 @@ run:
     - name: FLASK_ENV
       value: production
     - name: PYTHONUNBUFFERED
-      value: "1"
+      value: 1
     - name: FLASK_DEBUG
-      value: "0"
+      value: 0
+    - name: DEBUG
+      value: 0

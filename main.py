@@ -40,8 +40,11 @@ try:
             raise Exception("Could not find stockfish.exe in any of the expected locations")
     elif platform.system() == "Linux":
         # For AWS App Runner
-        stockfish = Stockfish(path="bin/stockfish")
-        print("Successfully initialized Stockfish from bin/stockfish")
+        stockfish_path = os.path.join(os.path.dirname(__file__), "bin", "stockfish")
+        if not os.path.exists(stockfish_path):
+            raise Exception(f"Stockfish not found at {stockfish_path}")
+        stockfish = Stockfish(path=stockfish_path)
+        print(f"Successfully initialized Stockfish from: {stockfish_path}")
     else:
         stockfish = Stockfish()
         print("Successfully initialized Stockfish with default path")
@@ -345,7 +348,11 @@ def after_request(response):
 @app.route('/process-image', methods=['POST', 'OPTIONS'])
 def process_image():
     if request.method == 'OPTIONS':
-        return '', 204
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response
         
     try:
         print("Received request for /process-image")
@@ -369,14 +376,19 @@ def process_image():
         if isinstance(text_response, dict) and 'error' in text_response:
             return jsonify(text_response), 500
 
-        return jsonify({'text': text_response})
+        response = jsonify({'text': text_response})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
     except Exception as e:
         print(f"Error processing image: {str(e)}")
-        return jsonify({'error': f'Error processing image: {str(e)}'}), 500
+        response = jsonify({'error': f'Error processing image: {str(e)}'}), 500
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
 
 if __name__ == '__main__':
     print("Starting Flask application...")
     print(f"Debug mode: {'ON' if DEBUG else 'OFF'}")
     print(f"Stockfish initialized: {'Yes' if stockfish else 'No'}")
     print("CORS enabled for all origins")
+    print("Listening on http://127.0.0.1:8080")
     app.run(host='0.0.0.0', port=8080, debug=DEBUG)
