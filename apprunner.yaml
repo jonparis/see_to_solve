@@ -3,21 +3,27 @@ runtime: python3
 build:
   commands:
     build:
+      - echo "Starting build process..."
       - yum update -y
       - yum install -y wget gcc gcc-c++ make git
+      - echo "Installing Python dependencies..."
       - pip install --upgrade pip
       - pip install -r requirements.txt
+      - echo "Installing Stockfish..."
       - mkdir -p bin
       - wget -O stockfish.tar https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64.tar
       - tar -xf stockfish.tar
       - mv stockfish/stockfish-ubuntu-x86-64 bin/stockfish
       - chmod +x bin/stockfish
       - rm -rf stockfish.tar stockfish
+      - echo "Verifying Stockfish installation..."
       - bin/stockfish "--version"
+      - echo "Installing Gunicorn..."
       - pip install gunicorn
+      - echo "Build process completed."
 run:
   runtime-version: 3.11.11
-  command: gunicorn --bind 0.0.0.0:8080 main:app --workers 4 --timeout 120 --log-file - --access-logfile - --error-logfile -
+  command: gunicorn --bind 0.0.0.0:8080 main:app --workers 2 --timeout 60 --log-level debug --log-file - --access-logfile - --error-logfile -
   network:
     port: 8080
   env:
