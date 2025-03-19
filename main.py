@@ -9,15 +9,45 @@ from configparser import ConfigParser
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
+# Initialize Flask app first
+app = Flask(__name__)
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Accept"]
+    }
+})
 
 # Update this path to where you placed stockfish.exe
-if platform.system() == "Windows":
-    stockfish = Stockfish(path="stockfish.exe")
-elif platform.system() == "Linux":
-    # For AWS App Runner
-    stockfish = Stockfish(path="bin/stockfish")
-else:
-    stockfish = Stockfish()
+try:
+    if platform.system() == "Windows":
+        # Try multiple possible paths for Windows
+        possible_paths = [
+            "stockfish.exe",
+            os.path.join(os.path.dirname(__file__), "stockfish.exe"),
+            os.path.join(os.path.dirname(__file__), "bin", "stockfish.exe")
+        ]
+        stockfish = None
+        for path in possible_paths:
+            try:
+                stockfish = Stockfish(path=path)
+                print(f"Successfully initialized Stockfish from: {path}")
+                break
+            except Exception:
+                continue
+        if not stockfish:
+            raise Exception("Could not find stockfish.exe in any of the expected locations")
+    elif platform.system() == "Linux":
+        # For AWS App Runner
+        stockfish = Stockfish(path="bin/stockfish")
+        print("Successfully initialized Stockfish from bin/stockfish")
+    else:
+        stockfish = Stockfish()
+        print("Successfully initialized Stockfish with default path")
+except Exception as e:
+    print(f"Error initializing Stockfish: {e}")
+    stockfish = None
 
 DELETE_DUP = "delete_dup"
 DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
@@ -138,7 +168,7 @@ class SeeToSolve():
         self.image_file = None
         self.model_path = "position_predict.pt"
         self.my_model = torch.jit.load(self.model_path)
-        self.print_board = True
+        self.print_board = False  # Changed to False for web service
         self.playing = None
         self.last_fen = None
         self.current_fen = None
@@ -203,14 +233,9 @@ class SeeToSolve():
     def set_playing(self, fen):
         playing_black_or_white = Utils.playing_black(fen)
         if self.playing == None and playing_black_or_white == None:
-            playing = input("are you playing White (w) or Black (b)?").lower()
-            if playing != "b":
-                self.playing = "w"
-            else:
-                self.playing = "b"
+            # Default to white if we can't determine the color
+            self.playing = "w"
         elif playing_black_or_white != None:
-            if self.playing != playing_black_or_white:
-                print("Playing:", playing_black_or_white)
             self.playing = playing_black_or_white
         return
     
@@ -228,6 +253,9 @@ class SeeToSolve():
             return response    
         
     def recommend_move(self):
+        if not stockfish:
+            return {"error": "Stockfish engine not initialized"}
+
         pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_file)
         self.set_playing(pred_fen)
         if self.playing == "b":
@@ -247,30 +275,24 @@ class SeeToSolve():
             if DEBUG: print("crash when setting fen")
             stockfish.send_quit_command()
             potential_moves = False
-            response = {"error": "unexpected error"}
-            return False
+            return {"error": "unexpected error"}
 
-        if self.print_board: self.print_board_to_console()
-        
         if is_valid:
             try:
-                potential_moves = self.get_good_enough_move()  # (stockfish.get_best_move())
+                potential_moves = self.get_good_enough_move()
             except StockfishException:
-                if DEBUG: print('crash when getting best move',  self.current_fen)
+                if DEBUG: print('crash when getting best move', self.current_fen)
                 stockfish.send_quit_command()
                 potential_moves = False
-                response = {"error": "unexpected error"}
-                return False
+                return {"error": "unexpected error"}
         else:
-            response = {"error": "not a valid fen (" +  self.current_fen + ")"}
-            print(response)
+            return {"error": "not a valid fen (" + self.current_fen + ")"}
 
         response = ""
         if potential_moves:
             i = 0
             for m in potential_moves:
                 if i > 0:
-                    print(' or ')
                     response += " or \n\n"
                 response += self.annotated_move(fen, m)
                 i = 1
@@ -300,26 +322,61 @@ class SeeToSolve():
         else:
             return [good_moves[0]]
 
-app = Flask(__name__)
 see_to_solve = SeeToSolve()
-CORS(app)  # Enables Cross-Origin Resource Sharing (CORS) for all routes
 
-@app.route('/process-image', methods=['POST'])
+@app.before_request
+def before_request():
+    print(f"\n=== New Request ===")
+    print(f"Method: {request.method}")
+    print(f"URL: {request.url}")
+    print(f"Headers: {dict(request.headers)}")
+    print(f"Files: {request.files}")
+    print(f"Form: {request.form}")
+    print("==================\n")
+
+@app.after_request
+def after_request(response):
+    print(f"\n=== Response ===")
+    print(f"Status: {response.status}")
+    print(f"Headers: {dict(response.headers)}")
+    print("==================\n")
+    return response
+
+@app.route('/process-image', methods=['POST', 'OPTIONS'])
 def process_image():
-    # Check if the request contains an 'image' file.
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image part in the request'}), 400
+    if request.method == 'OPTIONS':
+        return '', 204
+        
+    try:
+        print("Received request for /process-image")
+        # Check if the request contains an 'image' file.
+        if 'image' not in request.files:
+            print("No image file in request")
+            return jsonify({'error': 'No image part in the request'}), 400
 
-    file = request.files['image']
-    
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    see_to_solve.image_file = file
-    
-    text_response = see_to_solve.recommend_move()
+        file = request.files['image']
+        print(f"Received file: {file.filename}")
+        
+        if file.filename == '':
+            print("Empty filename")
+            return jsonify({'error': 'No selected file'}), 400
+        
+        see_to_solve.image_file = file
+        
+        text_response = see_to_solve.recommend_move()
+        print(f"Generated response: {text_response}")
 
-    return jsonify({'text': text_response})
+        if isinstance(text_response, dict) and 'error' in text_response:
+            return jsonify(text_response), 500
+
+        return jsonify({'text': text_response})
+    except Exception as e:
+        print(f"Error processing image: {str(e)}")
+        return jsonify({'error': f'Error processing image: {str(e)}'}), 500
 
 if __name__ == '__main__':
+    print("Starting Flask application...")
+    print(f"Debug mode: {'ON' if DEBUG else 'OFF'}")
+    print(f"Stockfish initialized: {'Yes' if stockfish else 'No'}")
+    print("CORS enabled for all origins")
     app.run(host='0.0.0.0', port=8080, debug=DEBUG)
