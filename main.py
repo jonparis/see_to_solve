@@ -34,17 +34,25 @@ try:
                 stockfish = Stockfish(path=path)
                 print(f"Successfully initialized Stockfish from: {path}")
                 break
-            except Exception:
+            except Exception as e:
+                print(f"Failed to initialize Stockfish from {path}: {e}")
                 continue
         if not stockfish:
             raise Exception("Could not find stockfish.exe in any of the expected locations")
     elif platform.system() == "Linux":
         # For AWS App Runner
         stockfish_path = os.path.join(os.path.dirname(__file__), "bin", "stockfish")
+        print(f"Looking for Stockfish at: {stockfish_path}")
         if not os.path.exists(stockfish_path):
             raise Exception(f"Stockfish not found at {stockfish_path}")
-        stockfish = Stockfish(path=stockfish_path)
-        print(f"Successfully initialized Stockfish from: {stockfish_path}")
+        try:
+            stockfish = Stockfish(path=stockfish_path)
+            print(f"Successfully initialized Stockfish from: {stockfish_path}")
+            # Test Stockfish
+            stockfish.get_parameters()
+            print("Stockfish parameters retrieved successfully")
+        except Exception as e:
+            raise Exception(f"Failed to initialize Stockfish: {e}")
     else:
         stockfish = Stockfish()
         print("Successfully initialized Stockfish with default path")
@@ -356,6 +364,9 @@ def process_image():
         
     try:
         print("Received request for /process-image")
+        if not stockfish:
+            return jsonify({'error': 'Stockfish engine not initialized'}), 500
+
         # Check if the request contains an 'image' file.
         if 'image' not in request.files:
             print("No image file in request")
@@ -390,5 +401,5 @@ if __name__ == '__main__':
     print(f"Debug mode: {'ON' if DEBUG else 'OFF'}")
     print(f"Stockfish initialized: {'Yes' if stockfish else 'No'}")
     print("CORS enabled for all origins")
-    print("Listening on http://127.0.0.1:8080")
+    print("Listening on http://0.0.0.0:8080")
     app.run(host='0.0.0.0', port=8080, debug=DEBUG)

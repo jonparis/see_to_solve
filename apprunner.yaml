@@ -2,7 +2,12 @@ version: 1.0
 runtime: python3
 build:
   commands:
+    pre-build:
+      - yum update -y
+      - yum install -y wget gcc gcc-c++ make git glibc-static libstdc++-static python3-devel
+      - yum install -y libstdc++ libstdc++-devel
     build:
+      - pip install --upgrade pip
       - pip install -r requirements.txt
       - mkdir -p bin
       - wget -O stockfish.tar https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64.tar
