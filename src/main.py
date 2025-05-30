@@ -9,7 +9,71 @@ from configparser import ConfigParser
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# Initialize Flask app first
+# Update this path to where you placed stockfish.exe
+def initialize_stockfish():
+    stockfish = None
+    try:
+        if platform.system() == "Windows":
+            # Try multiple possible paths for Windows
+            possible_paths = [
+                "stockfish.exe",
+                os.path.join(os.path.dirname(__file__), "stockfish.exe"),
+                os.path.join(os.path.dirname(__file__), "bin", "stockfish.exe")
+            ]
+            for path in possible_paths:
+                try:
+                    stockfish = Stockfish(path=path)
+                    print(f"Successfully initialized Stockfish from: {path}")
+                    break
+                except Exception as e:
+                    print(f"Failed to initialize Stockfish from {path}: {e}")
+                    continue
+            if not stockfish:
+                raise Exception("Could not find stockfish.exe in any of the expected locations")
+        elif platform.system() == "Darwin":  # macOS
+            possible_paths = [
+                "/opt/homebrew/bin/stockfish",  # Homebrew on Apple Silicon
+                "/usr/local/bin/stockfish",     # Homebrew on Intel Mac
+                os.path.join(os.path.dirname(__file__), "bin", "stockfish"),
+                "stockfish"
+            ]
+            for path in possible_paths:
+                try:
+                    print(f"Trying Stockfish path: {path}")
+                    stockfish = Stockfish(path=path)
+                    # Test if Stockfish is working
+                    stockfish.get_parameters()
+                    print(f"Successfully initialized Stockfish from: {path}")
+                    return stockfish
+                except Exception as e:
+                    print(f"Failed to initialize Stockfish from {path}: {e}")
+                    continue
+            if not stockfish:
+                raise Exception("Could not find Stockfish in any of the expected locations")
+        elif platform.system() == "Linux":
+            # For AWS App Runner
+            stockfish_path = os.path.join(os.path.dirname(__file__), "bin", "stockfish")
+            print(f"Looking for Stockfish at: {stockfish_path}")
+            if not os.path.exists(stockfish_path):
+                raise Exception(f"Stockfish not found at {stockfish_path}")
+            try:
+                stockfish = Stockfish(path=stockfish_path)
+                print(f"Successfully initialized Stockfish from: {stockfish_path}")
+                # Test Stockfish
+                stockfish.get_parameters()
+                print("Stockfish parameters retrieved successfully")
+            except Exception as e:
+                raise Exception(f"Failed to initialize Stockfish: {e}")
+        else:
+            stockfish = Stockfish()
+            print("Successfully initialized Stockfish with default path")
+            return stockfish
+    except Exception as e:
+        print(f"Error initializing Stockfish: {e}")
+        return None
+    return stockfish
+
+# Initialize Flask app
 app = Flask(__name__)
 CORS(app, resources={
     r"/*": {
@@ -19,68 +83,8 @@ CORS(app, resources={
     }
 })
 
-# Update this path to where you placed stockfish.exe
-try:
-    if platform.system() == "Windows":
-        # Try multiple possible paths for Windows
-        possible_paths = [
-            "stockfish.exe",
-            os.path.join(os.path.dirname(__file__), "stockfish.exe"),
-            os.path.join(os.path.dirname(__file__), "bin", "stockfish.exe")
-        ]
-        stockfish = None
-        for path in possible_paths:
-            try:
-                stockfish = Stockfish(path=path)
-                print(f"Successfully initialized Stockfish from: {path}")
-                break
-            except Exception as e:
-                print(f"Failed to initialize Stockfish from {path}: {e}")
-                continue
-        if not stockfish:
-            raise Exception("Could not find stockfish.exe in any of the expected locations")
-    elif platform.system() == "Darwin":  # macOS
-        possible_paths = [
-            "/opt/homebrew/bin/stockfish",  # Homebrew on Apple Silicon
-            "/usr/local/bin/stockfish",     # Homebrew on Intel Mac
-            os.path.join(os.path.dirname(__file__), "bin", "stockfish"),
-            os.path.join(os.path.dirname(__file__), "stockfish-macos-m1-apple-silicon"),
-            "stockfish"
-        ]
-        stockfish = None
-        for path in possible_paths:
-            try:
-                print(f"Trying Stockfish path: {path}")
-                stockfish = Stockfish(path=path)
-                # Test if Stockfish is working
-                stockfish.get_parameters()
-                print(f"Successfully initialized Stockfish from: {path}")
-                break
-            except Exception as e:
-                print(f"Failed to initialize Stockfish from {path}: {e}")
-                continue
-        if not stockfish:
-            raise Exception("Could not find Stockfish in any of the expected locations")
-    elif platform.system() == "Linux":
-        # For AWS App Runner
-        stockfish_path = os.path.join(os.path.dirname(__file__), "bin", "stockfish")
-        print(f"Looking for Stockfish at: {stockfish_path}")
-        if not os.path.exists(stockfish_path):
-            raise Exception(f"Stockfish not found at {stockfish_path}")
-        try:
-            stockfish = Stockfish(path=stockfish_path)
-            print(f"Successfully initialized Stockfish from: {stockfish_path}")
-            # Test Stockfish
-            stockfish.get_parameters()
-            print("Stockfish parameters retrieved successfully")
-        except Exception as e:
-            raise Exception(f"Failed to initialize Stockfish: {e}")
-    else:
-        stockfish = Stockfish()
-        print("Successfully initialized Stockfish with default path")
-except Exception as e:
-    print(f"Error initializing Stockfish: {e}")
-    stockfish = None
+# Initialize Stockfish
+stockfish = initialize_stockfish()
 
 DELETE_DUP = "delete_dup"
 DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
@@ -286,8 +290,12 @@ class SeeToSolve():
             return response    
         
     def recommend_move(self):
+        global stockfish
         if not stockfish:
-            return {"error": "Stockfish engine not initialized"}
+            print("Reinitializing Stockfish...")
+            stockfish = initialize_stockfish()
+            if not stockfish:
+                return {"error": "Stockfish engine not initialized"}
 
         pred_fen = fen = Utils.pred_single_img(self.model_path, self.image_file)
         self.set_playing(pred_fen)
@@ -303,21 +311,30 @@ class SeeToSolve():
         
         try:
             stockfish.set_fen_position(self.current_fen)
-        except StockfishException:
+        except StockfishException as e:
+            print(f"Stockfish error: {e}")
             is_valid = False
-            if DEBUG: print("crash when setting fen")
-            stockfish.send_quit_command()
-            potential_moves = False
-            return {"error": "unexpected error"}
+            stockfish = initialize_stockfish()  # Try to reinitialize
+            if not stockfish:
+                return {"error": "Failed to reinitialize Stockfish"}
+            try:
+                stockfish.set_fen_position(self.current_fen)
+            except StockfishException:
+                return {"error": "Failed to set position after reinitialization"}
 
         if is_valid:
             try:
                 potential_moves = self.get_good_enough_move()
-            except StockfishException:
-                if DEBUG: print('crash when getting best move', self.current_fen)
-                stockfish.send_quit_command()
-                potential_moves = False
-                return {"error": "unexpected error"}
+            except StockfishException as e:
+                print(f"Stockfish error: {e}")
+                stockfish = initialize_stockfish()  # Try to reinitialize
+                if not stockfish:
+                    return {"error": "Failed to reinitialize Stockfish"}
+                try:
+                    stockfish.set_fen_position(self.current_fen)
+                    potential_moves = self.get_good_enough_move()
+                except StockfishException:
+                    return {"error": "Failed to get moves after reinitialization"}
         else:
             return {"error": "not a valid fen (" + self.current_fen + ")"}
 

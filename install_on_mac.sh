@@ -11,9 +11,18 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Install Python dependencies
+# Create and activate virtual environment
+echo "Setting up Python virtual environment..."
+VENV_DIR="$SCRIPT_DIR/venv"
+python3 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+
+# Upgrade pip in the virtual environment
+python3 -m pip install --upgrade pip
+
+# Install Python dependencies in the virtual environment
 echo "Installing Python dependencies..."
-pip3 install -r "$SCRIPT_DIR/src/requirements.txt"
+pip install -r "$SCRIPT_DIR/src/requirements.txt"
 
 # Function to download and install Stockfish
 install_stockfish_binary() {
@@ -75,7 +84,7 @@ fi
 TEMP_SCRIPT=$(mktemp)
 cat > "$TEMP_SCRIPT" << EOL
 tell application "Terminal"
-    do script "cd '$SCRIPT_DIR/src' && python3 main.py"
+    do script "cd '$SCRIPT_DIR/src' && source '$VENV_DIR/bin/activate' && python3 main.py"
     activate
 end tell
 EOL
